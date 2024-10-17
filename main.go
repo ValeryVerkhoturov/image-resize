@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/draw"
@@ -27,17 +29,18 @@ func resizeThumbnails(dir string) error {
 		return err
 	}
 
+	var errorsSlice []error
 	for _, file := range files {
 		if isThumbnail(file.Name()) {
 			inputPath := filepath.Join(dir, file.Name())
 			outputPath := filepath.Join(dir, "resized_"+file.Name())
 
-			if err := processImage(inputPath, outputPath, file.Name()); err != nil {
-				log.Printf("Failed to resize %s: %v", file.Name(), err)
+			if err = processImage(inputPath, outputPath, file.Name()); err != nil {
+				errorsSlice = append(errorsSlice, fmt.Errorf("failed to resize %s: %v", file.Name(), err))
 			}
 		}
 	}
-	return nil
+	return errors.Join(errorsSlice...)
 }
 
 func isThumbnail(fileName string) bool {

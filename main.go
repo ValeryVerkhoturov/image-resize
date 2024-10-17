@@ -5,24 +5,71 @@ import (
 	"image/color"
 	"image/draw"
 	"image/jpeg"
+	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/chai2010/webp"
 )
 
 func main() {
-	err := resizeToSquare(filepath.Join("assets", "input.jpg"), filepath.Join("assets", "output.jpg"))
-	if err != nil {
-		log.Print(err)
-	}
-
-	err = resizeToSquare(filepath.Join("assets", "input2.jpg"), filepath.Join("assets", "output2.jpg"))
-	if err != nil {
+	if err := resizeThumbnails("assets"); err != nil {
 		log.Print(err)
 	}
 }
 
-func resizeToSquare(inputPath, outputPath string) error {
+func resizeThumbnails(dir string) error {
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if isThumbnail(file.Name()) {
+			inputPath := filepath.Join(dir, file.Name())
+			outputPath := filepath.Join(dir, "resized_"+file.Name())
+
+			if err := processImage(inputPath, outputPath, file.Name()); err != nil {
+				log.Printf("Failed to resize %s: %v", file.Name(), err)
+			}
+		}
+	}
+	return nil
+}
+
+func isThumbnail(fileName string) bool {
+	return strings.HasPrefix(fileName, "thumbnail_")
+}
+
+func processImage(inputPath, outputPath, fileName string) error {
+	switch {
+	case strings.HasSuffix(fileName, ".jpeg") || strings.HasSuffix(fileName, ".jpg"):
+		return resizeJpgToSquare(inputPath, outputPath)
+	case strings.HasSuffix(fileName, ".webp"):
+		return resizeWebpToSquare(inputPath, outputPath)
+	default:
+		return nil
+	}
+}
+
+func resizeJpgToSquare(inputPath, outputPath string) error {
+	return resizeImage(inputPath, outputPath, jpegEncodeWrapper)
+}
+
+func resizeWebpToSquare(inputPath, outputPath string) error {
+	return resizeImage(inputPath, outputPath, func(w io.Writer, img image.Image) error {
+		return webp.Encode(w, img, &webp.Options{Lossless: false})
+	})
+}
+
+func jpegEncodeWrapper(w io.Writer, img image.Image) error {
+	return jpeg.Encode(w, img, nil) // You can specify options here if needed
+}
+
+func resizeImage(inputPath, outputPath string, encodeFunc func(io.Writer, image.Image) error) error {
 	imgFile, err := os.Open(inputPath)
 	if err != nil {
 		return err
@@ -34,29 +81,41 @@ func resizeToSquare(inputPath, outputPath string) error {
 		return err
 	}
 
+	squareImg := createSquareImage(img)
+
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	return encodeFunc(outFile, squareImg)
+}
+
+func createSquareImage(img image.Image) *image.RGBA {
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	var newSize int
-	if width > height {
-		newSize = width
-	} else {
-		newSize = height
-	}
-
+	newSize := max(width, height)
 	squareImg := image.NewRGBA(image.Rect(0, 0, newSize, newSize))
 	draw.Draw(squareImg, squareImg.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
 
 	offsetX := (newSize - width) / 2
 	offsetY := (newSize - height) / 2
 
-	draw.Draw(squareImg, image.Rect(offsetX, offsetY, offsetX+width, offsetY+height), img, bounds.Min, draw.Over)
+	draw.Draw(squareImg,
+		image.Rect(offsetX, offsetY, offsetX+width, offsetY+height),
+		img,
+		bounds.Min,
+		draw.Over)
 
-	outFile, err := os.Create(outputPath)
-	defer outFile.Close()
-	if err != nil {
-		return err
+	return squareImg
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
 	}
-	return jpeg.Encode(outFile, squareImg, nil)
+	return b
 }

@@ -61,12 +61,12 @@ func resizeJpgToSquare(inputPath, outputPath string) error {
 
 func resizeWebpToSquare(inputPath, outputPath string) error {
 	return resizeImage(inputPath, outputPath, func(w io.Writer, img image.Image) error {
-		return webp.Encode(w, img, &webp.Options{Lossless: false})
+		return webp.Encode(w, img, &webp.Options{Lossless: true})
 	})
 }
 
 func jpegEncodeWrapper(w io.Writer, img image.Image) error {
-	return jpeg.Encode(w, img, nil) // You can specify options here if needed
+	return jpeg.Encode(w, img, nil)
 }
 
 func resizeImage(inputPath, outputPath string, encodeFunc func(io.Writer, image.Image) error) error {
@@ -111,11 +111,4 @@ func createSquareImage(img image.Image) *image.RGBA {
 		draw.Over)
 
 	return squareImg
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

@@ -52,20 +52,25 @@ func ProcessImage(inputPath, outputPath, fileName string) error {
 }
 
 func resizeJpgToSquare(inputPath, outputPath string) error {
-	return resizeImage(inputPath, outputPath, jpegEncodeWrapper)
-}
-
-func resizeWebpToSquare(inputPath, outputPath string) error {
-	return resizeImage(inputPath, outputPath, func(w io.Writer, img image.Image) error {
-		return webp.Encode(w, img, &webp.Options{Lossless: true})
-	})
+	return resizeImage(inputPath, outputPath, jpegEncodeWrapper, &color.White)
 }
 
 func jpegEncodeWrapper(w io.Writer, img image.Image) error {
 	return jpeg.Encode(w, img, nil)
 }
 
-func resizeImage(inputPath, outputPath string, encodeFunc func(io.Writer, image.Image) error) error {
+func resizeWebpToSquare(inputPath, outputPath string) error {
+	return resizeImage(inputPath, outputPath, webpEncodeWrapper, nil)
+}
+
+func webpEncodeWrapper(w io.Writer, img image.Image) error {
+	return webp.Encode(w, img, &webp.Options{Lossless: true, Exact: true})
+}
+
+func resizeImage(inputPath,
+	outputPath string,
+	encodeFunc func(io.Writer, image.Image) error,
+	bordersColor *color.Gray16) error {
 	imgFile, err := os.Open(inputPath)
 	if err != nil {
 		return err
@@ -77,7 +82,7 @@ func resizeImage(inputPath, outputPath string, encodeFunc func(io.Writer, image.
 		return err
 	}
 
-	squareImg := createSquareImage(img)
+	squareImg := createSquareImage(img, bordersColor)
 
 	outFile, err := os.Create(outputPath)
 	if err != nil {
@@ -88,14 +93,17 @@ func resizeImage(inputPath, outputPath string, encodeFunc func(io.Writer, image.
 	return encodeFunc(outFile, squareImg)
 }
 
-func createSquareImage(img image.Image) *image.RGBA {
+func createSquareImage(img image.Image, bordersColor *color.Gray16) *image.RGBA {
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 
 	newSize := max(width, height)
 	squareImg := image.NewRGBA(image.Rect(0, 0, newSize, newSize))
-	draw.Draw(squareImg, squareImg.Bounds(), &image.Uniform{color.White}, image.Point{}, draw.Src)
+
+	if bordersColor != nil {
+		draw.Draw(squareImg, squareImg.Bounds(), &image.Uniform{bordersColor}, image.Point{}, draw.Src)
+	}
 
 	offsetX := (newSize - width) / 2
 	offsetY := (newSize - height) / 2
